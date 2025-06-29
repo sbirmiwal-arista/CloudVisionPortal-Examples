@@ -4,10 +4,10 @@
     value:
       key:
         studio_id: bcf69828-fc77-4a22-b5d3-1ba1bf6682de
-        workspace_id: 7da8ada7-2b22-49a8-a45c-f5a9bd554fc2
-      created_at: '2025-06-25T20:18:10.247Z'
+        workspace_id: 69ee2bb1-179b-4c24-92cc-d8490a2cc4f0
+      created_at: '2025-06-29T05:06:44.139Z'
       created_by: sbirmiwal
-      last_modified_at: '2025-06-29T00:08:28.322Z'
+      last_modified_at: '2025-06-29T06:03:52.622Z'
       last_modified_by: sbirmiwal
       display_name: DES Studio
       description: Provision 1-stage and 2-stage DES clusters
@@ -17,6 +17,8 @@
           <%
 
           # Globals
+
+          my_device = ctx.getDevice()
 
           clustersGroup = None                    # None or object (if DES is configured)
 
@@ -31,7 +33,13 @@
           stage2SpineSwitchCount = 0              # number of stage 2 spine switches
           podsData = {}                           # { podId : { "leafSwitchCount": ..., "spineSwitchCount": ... } }
 
-          my_device = ctx.getDevice()
+          # Globals: BGP configuration related
+          bgpAsn = None                           # None or string
+          bgpPeerGroup = None                     # None or BGP peer group name
+          baseAddr = None                         # None or (192, 168, 0, 0)
+          allBgpNbrs = set()                      # Set of strings (IP addresses)
+          selfLeafAddr = None                     # None or string
+
 
 
           # Debug
@@ -43,8 +51,16 @@
              if clustersGroup:
 
                 loopbackIntf = clustersGroup["controlPlaneConfiguration"]["loopbackInterface"]
-                baseIpv4Subnet = clustersGroup["controlPlaneConfiguration"]["baseIPv4Address"] + "/16"
-                baseIpv6Subnet = clustersGroup["controlPlaneConfiguration"]["baseIPv6Address"] + "/112"
+                bgpAsn = clustersGroup["controlPlaneConfiguration"]["bgpAsNumber"]
+                bgpPeerGroup = clustersGroup["controlPlaneConfiguration"]["bgpClusterPeerGroupName"]
+
+                baseIpv4Addr = clustersGroup["controlPlaneConfiguration"].get("baseIPv4Address")
+                baseIpv4Subnet = ( baseIpv4Addr + "/16" ) if baseIpv4Addr else None
+
+                baseAddr = baseIpv4Addr.split(".") if baseIpv4Addr else None
+
+                baseIpv6Addr = clustersGroup["controlPlaneConfiguration"].get("baseIPv6Address")
+                baseIpv6Subnet = ( baseIpv6Addr + "/112" ) if baseIpv6Addr else None
 
                 stage2SpineSwitchCount = clustersGroup.get("stage2SpineSwitchCount", 0)
 
@@ -89,12 +105,30 @@
                 endif
 
              endif
+
+
+             # BGP peer list generation
+             if role == "leaf" and baseAddr:
+                selfLeafAddr = ".".join(baseAddr[:2] + [str(selfPodId), str(selfMemberId)])
+                for podId, podData in podsData.items():
+                   podId = str(podId)
+                   leafCount = int(podData["leafSwitchCount"])
+
+                   for peerId in range(leafCount):
+                      allBgpNbrs.add(".".join(baseAddr[:-2] + [podId, str(peerId)]))
+                   endfor
+                endfor
+             endif
+
           endif
           %>
 
+          ## --------------------------------------------------------------------
           ## Render configuration
 
           % if clustersGroup:
+
+          ## "switch cluster voq" configuration
 
           switch cluster voq
 
@@ -152,29 +186,45 @@
 
           % endfor
 
+
+          % if role == "leaf":
+
+          !
+          router bgp ${bgpAsn}
+             neighbor ${bgpPeerGroup} peer group
+             neighbor ${bgpPeerGroup} remote-as ${bgpAsn}
+
+          % for nbrAddr in sorted(list(allBgpNbrs - {selfLeafAddr})):
+
+             neighbor ${nbrAddr} peer group ${bgpPeerGroup}
+             
+          % endfor
+
+          % endif
+
           % endif # if clustersGroup
       input_schema:
         fields:
           values:
-            ccbdec0b-bc3f-4709-9938-dda1b808acfa:
-              id: ccbdec0b-bc3f-4709-9938-dda1b808acfa
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: memberId
-              label: Member ID
+            9ce08ef5-e624-4f89-bf43-e4840ff8a991:
+              id: 9ce08ef5-e624-4f89-bf43-e4840ff8a991
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: pods
+              label: Pods
               description: ''
               required: false
               boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 0..39
-                dynamic_options: null
-                extra_values_allowed: false
+              integer_props: null
               float_props: null
               string_props: null
               group_props: null
               collection_props: null
-              resolver_props: null
+              resolver_props:
+                base_field_id: 6f25e175-dc2d-4174-b436-110448e47bd4
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: DesClusterPod
+                tag_filter_query: null
               auto_fill_action_id: ''
               tag_matcher_props: null
             37504c09-b0b5-4fba-b6c5-830bb4447fa9:
@@ -198,24 +248,23 @@
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            6f25e175-dc2d-4174-b436-110448e47bd4:
-              id: 6f25e175-dc2d-4174-b436-110448e47bd4
-              type: INPUT_FIELD_TYPE_GROUP
-              name: podsGroup
-              label: Pods Group
-              description: Group of members for Pods
+            8e764039-bc13-405c-aaeb-c621f3be6704:
+              id: 8e764039-bc13-405c-aaeb-c621f3be6704
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: leafSwitchCount
+              label: Leaf switch count
+              description: ''
               required: false
               boolean_props: null
-              integer_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 1..256
+                dynamic_options: null
+                extra_values_allowed: false
               float_props: null
               string_props: null
-              group_props:
-                members:
-                  values:
-                    - 07bc2f7e-6625-45b9-ae46-c422feeb94c7
-                    - 8e764039-bc13-405c-aaeb-c621f3be6704
-                    - dfebe4fa-5fc9-42ab-aa54-bccb5e2c9356
-                    - f59c6c99-d4cc-4b79-8d7d-b74209d761f6
+              group_props: null
               collection_props: null
               resolver_props: null
               auto_fill_action_id: ''
@@ -241,42 +290,18 @@
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            2a9c5bb1-7d2c-4828-96a0-daa302f9ea24:
-              id: 2a9c5bb1-7d2c-4828-96a0-daa302f9ea24
-              type: INPUT_FIELD_TYPE_STRING
-              name: baseIPv6Address
-              label: Base IPv6 address
-              description: 'First IPv6 address for a /112 subnet for leaf loopback addresses '
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props:
-                default_value: 'fd00::'
-                static_options: null
-                dynamic_options: null
-                length: null
-                pattern: null
-                format: null
-                is_secret: false
-                extra_values_allowed: false
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: null
-              tag_matcher_props: null
-            4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4:
-              id: 4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4
+            5a79d5f3-d82e-44e5-83e1-8ef62957a010:
+              id: 5a79d5f3-d82e-44e5-83e1-8ef62957a010
               type: INPUT_FIELD_TYPE_INTEGER
-              name: stage2SpineSwitchCount
-              label: Stage 2 spine switch count
+              name: memberId
+              label: Member ID
               description: ''
               required: false
               boolean_props: null
               integer_props:
                 default_value: null
                 static_options: null
-                range: 0..256
+                range: 0..255
                 dynamic_options: null
                 extra_values_allowed: false
               float_props: null
@@ -284,6 +309,27 @@
               group_props: null
               collection_props: null
               resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7:
+              id: fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: clusters
+              label: Clusters
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props:
+                base_field_id: f8f37716-98d4-4535-a026-f3e8173692d0
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: DesCluster
+                tag_filter_query: null
               auto_fill_action_id: ''
               tag_matcher_props: null
             f8f37716-98d4-4535-a026-f3e8173692d0:
@@ -308,36 +354,54 @@
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54:
-              id: d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
-              type: INPUT_FIELD_TYPE_STRING
-              name: baseIPv4Address
-              label: Base IPv4 address
-              description: 'First IPv4 address for a /16 subnet for leaf loopback addresses '
+            4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4:
+              id: 4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: stage2SpineSwitchCount
+              label: Stage 2 spine switch count
+              description: ''
               required: false
               boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props:
-                default_value: 192.168.0.0
+              integer_props:
+                default_value: null
                 static_options: null
+                range: 0..256
                 dynamic_options: null
-                length: null
-                pattern: null
-                format: null
-                is_secret: false
                 extra_values_allowed: false
+              float_props: null
+              string_props: null
               group_props: null
               collection_props: null
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            c979d984-a60c-4938-8057-b3e023ad5c3f:
-              id: c979d984-a60c-4938-8057-b3e023ad5c3f
-              type: INPUT_FIELD_TYPE_GROUP
-              name: controlPlaneConfiguration
-              label: Control plane configuration
+            ccbdec0b-bc3f-4709-9938-dda1b808acfa:
+              id: ccbdec0b-bc3f-4709-9938-dda1b808acfa
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: memberId
+              label: Member ID
               description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 0..39
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            2c2bc4da-89f7-438c-931b-861d70aaded6:
+              id: 2c2bc4da-89f7-438c-931b-861d70aaded6
+              type: INPUT_FIELD_TYPE_GROUP
+              name: podSpinesGroup
+              label: Spine switches Group
+              description: Group of members for Spine switches
               required: false
               boolean_props: null
               integer_props: null
@@ -346,12 +410,30 @@
               group_props:
                 members:
                   values:
-                    - a9200e8c-5d06-43a7-ac76-d921922f4644
-                    - d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
-                    - 37504c09-b0b5-4fba-b6c5-830bb4447fa9
-                    - 2a9c5bb1-7d2c-4828-96a0-daa302f9ea24
+                    - ccbdec0b-bc3f-4709-9938-dda1b808acfa
               collection_props: null
               resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            f59c6c99-d4cc-4b79-8d7d-b74209d761f6:
+              id: f59c6c99-d4cc-4b79-8d7d-b74209d761f6
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: spineSwitches
+              label: Spine switches
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props:
+                base_field_id: 2c2bc4da-89f7-438c-931b-861d70aaded6
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: null
+                tag_filter_query: null
               auto_fill_action_id: ''
               tag_matcher_props: null
             10c2ca0b-a004-4674-9b55-f3e974a69901:
@@ -420,22 +502,177 @@
                 tag_filter_query: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            8e764039-bc13-405c-aaeb-c621f3be6704:
-              id: 8e764039-bc13-405c-aaeb-c621f3be6704
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: leafSwitchCount
-              label: Leaf switch count
+            root:
+              id: root
+              type: INPUT_FIELD_TYPE_GROUP
+              name: ''
+              label: ''
               description: ''
               required: false
               boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 1..256
-                dynamic_options: null
-                extra_values_allowed: false
+              integer_props: null
               float_props: null
               string_props: null
+              group_props:
+                members:
+                  values:
+                    - fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: null
+              tag_matcher_props: null
+            2a9c5bb1-7d2c-4828-96a0-daa302f9ea24:
+              id: 2a9c5bb1-7d2c-4828-96a0-daa302f9ea24
+              type: INPUT_FIELD_TYPE_STRING
+              name: baseIPv6Address
+              label: Base IPv6 address
+              description: 'First IPv6 address for a /112 subnet for leaf loopback addresses '
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props:
+                default_value: null
+                static_options: null
+                dynamic_options: null
+                length: null
+                pattern: null
+                format: null
+                is_secret: false
+                extra_values_allowed: false
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            c5fa6ece-a88d-42e9-b8a6-841f2714353c:
+              id: c5fa6ece-a88d-42e9-b8a6-841f2714353c
+              type: INPUT_FIELD_TYPE_GROUP
+              name: stage2SpinesGroup
+              label: Stage 2 Spines Group
+              description: Group of members for Stage 2 Spines
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props:
+                members:
+                  values:
+                    - 10c2ca0b-a004-4674-9b55-f3e974a69901
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54:
+              id: d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
+              type: INPUT_FIELD_TYPE_STRING
+              name: baseIPv4Address
+              label: Base IPv4 address
+              description: 'First IPv4 address for a /16 subnet for leaf loopback addresses '
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props:
+                default_value: null
+                static_options: null
+                dynamic_options: null
+                length: null
+                pattern: null
+                format: null
+                is_secret: false
+                extra_values_allowed: false
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            6f25e175-dc2d-4174-b436-110448e47bd4:
+              id: 6f25e175-dc2d-4174-b436-110448e47bd4
+              type: INPUT_FIELD_TYPE_GROUP
+              name: podsGroup
+              label: Pods Group
+              description: Group of members for Pods
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props:
+                members:
+                  values:
+                    - 07bc2f7e-6625-45b9-ae46-c422feeb94c7
+                    - 8e764039-bc13-405c-aaeb-c621f3be6704
+                    - dfebe4fa-5fc9-42ab-aa54-bccb5e2c9356
+                    - f59c6c99-d4cc-4b79-8d7d-b74209d761f6
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            c979d984-a60c-4938-8057-b3e023ad5c3f:
+              id: c979d984-a60c-4938-8057-b3e023ad5c3f
+              type: INPUT_FIELD_TYPE_GROUP
+              name: controlPlaneConfiguration
+              label: Control plane configuration
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props:
+                members:
+                  values:
+                    - a9200e8c-5d06-43a7-ac76-d921922f4644
+                    - d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
+                    - 37504c09-b0b5-4fba-b6c5-830bb4447fa9
+                    - 2a9c5bb1-7d2c-4828-96a0-daa302f9ea24
+                    - 5b5128b6-d104-4f38-a4d8-e3b1cb75ccd2
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            acc7753a-0b67-4359-9b0a-8e9f326b43da:
+              id: acc7753a-0b67-4359-9b0a-8e9f326b43da
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: stage2Spines
+              label: Stage 2 Spines
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props:
+                base_field_id: c5fa6ece-a88d-42e9-b8a6-841f2714353c
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: null
+                tag_filter_query: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            5b5128b6-d104-4f38-a4d8-e3b1cb75ccd2:
+              id: 5b5128b6-d104-4f38-a4d8-e3b1cb75ccd2
+              type: INPUT_FIELD_TYPE_STRING
+              name: bgpClusterPeerGroupName
+              label: BGP cluster peer group name
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props:
+                default_value: DES_PEERS
+                static_options: null
+                dynamic_options: null
+                length: null
+                pattern: null
+                format: null
+                is_secret: false
+                extra_values_allowed: false
               group_props: null
               collection_props: null
               resolver_props: null
@@ -460,168 +697,6 @@
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            root:
-              id: root
-              type: INPUT_FIELD_TYPE_GROUP
-              name: ''
-              label: ''
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: null
-              tag_matcher_props: null
-            acc7753a-0b67-4359-9b0a-8e9f326b43da:
-              id: acc7753a-0b67-4359-9b0a-8e9f326b43da
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: stage2Spines
-              label: Stage 2 Spines
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props:
-                base_field_id: c5fa6ece-a88d-42e9-b8a6-841f2714353c
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: null
-                tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            2c2bc4da-89f7-438c-931b-861d70aaded6:
-              id: 2c2bc4da-89f7-438c-931b-861d70aaded6
-              type: INPUT_FIELD_TYPE_GROUP
-              name: podSpinesGroup
-              label: Spine switches Group
-              description: Group of members for Spine switches
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - ccbdec0b-bc3f-4709-9938-dda1b808acfa
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            c5fa6ece-a88d-42e9-b8a6-841f2714353c:
-              id: c5fa6ece-a88d-42e9-b8a6-841f2714353c
-              type: INPUT_FIELD_TYPE_GROUP
-              name: stage2SpinesGroup
-              label: Stage 2 Spines Group
-              description: Group of members for Stage 2 Spines
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - 10c2ca0b-a004-4674-9b55-f3e974a69901
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            5a79d5f3-d82e-44e5-83e1-8ef62957a010:
-              id: 5a79d5f3-d82e-44e5-83e1-8ef62957a010
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: memberId
-              label: Member ID
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 0..255
-                dynamic_options: null
-                extra_values_allowed: false
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            f59c6c99-d4cc-4b79-8d7d-b74209d761f6:
-              id: f59c6c99-d4cc-4b79-8d7d-b74209d761f6
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: spineSwitches
-              label: Spine switches
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props:
-                base_field_id: 2c2bc4da-89f7-438c-931b-861d70aaded6
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: null
-                tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            9ce08ef5-e624-4f89-bf43-e4840ff8a991:
-              id: 9ce08ef5-e624-4f89-bf43-e4840ff8a991
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: pods
-              label: Pods
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props:
-                base_field_id: 6f25e175-dc2d-4174-b436-110448e47bd4
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: DesClusterPod
-                tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7:
-              id: fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: clusters
-              label: Clusters
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props:
-                base_field_id: f8f37716-98d4-4535-a026-f3e8173692d0
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: DesCluster
-                tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
         layout:
-          value: '{"6f25e175-dc2d-4174-b436-110448e47bd4":{"key":"6f25e175-dc2d-4174-b436-110448e47bd4","type":"INPUT","order":["07bc2f7e-6625-45b9-ae46-c422feeb94c7","8e764039-bc13-405c-aaeb-c621f3be6704","f59c6c99-d4cc-4b79-8d7d-b74209d761f6","dfebe4fa-5fc9-42ab-aa54-bccb5e2c9356"]},"f8f37716-98d4-4535-a026-f3e8173692d0":{"key":"f8f37716-98d4-4535-a026-f3e8173692d0","type":"INPUT","order":["9ce08ef5-e624-4f89-bf43-e4840ff8a991","4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4","acc7753a-0b67-4359-9b0a-8e9f326b43da","c979d984-a60c-4938-8057-b3e023ad5c3f"]},"c979d984-a60c-4938-8057-b3e023ad5c3f":{"key":"c979d984-a60c-4938-8057-b3e023ad5c3f","type":"INPUT","order":["37504c09-b0b5-4fba-b6c5-830bb4447fa9","d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54","2a9c5bb1-7d2c-4828-96a0-daa302f9ea24","a9200e8c-5d06-43a7-ac76-d921922f4644"]}}'
+          value: '{"6f25e175-dc2d-4174-b436-110448e47bd4":{"key":"6f25e175-dc2d-4174-b436-110448e47bd4","type":"INPUT","order":["07bc2f7e-6625-45b9-ae46-c422feeb94c7","f59c6c99-d4cc-4b79-8d7d-b74209d761f6","8e764039-bc13-405c-aaeb-c621f3be6704","dfebe4fa-5fc9-42ab-aa54-bccb5e2c9356"]},"f8f37716-98d4-4535-a026-f3e8173692d0":{"key":"f8f37716-98d4-4535-a026-f3e8173692d0","type":"INPUT","order":["9ce08ef5-e624-4f89-bf43-e4840ff8a991","4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4","acc7753a-0b67-4359-9b0a-8e9f326b43da","c979d984-a60c-4938-8057-b3e023ad5c3f"]},"c979d984-a60c-4938-8057-b3e023ad5c3f":{"key":"c979d984-a60c-4938-8057-b3e023ad5c3f","type":"INPUT","order":["37504c09-b0b5-4fba-b6c5-830bb4447fa9","5b5128b6-d104-4f38-a4d8-e3b1cb75ccd2","d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54","2a9c5bb1-7d2c-4828-96a0-daa302f9ea24","a9200e8c-5d06-43a7-ac76-d921922f4644"]}}'
       from_package: ''
