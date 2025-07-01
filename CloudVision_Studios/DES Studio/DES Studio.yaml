@@ -7,7 +7,7 @@
         workspace_id: b02c87fe-a691-48f0-a140-019bb096702b
       created_at: '2025-07-01T18:56:48.468Z'
       created_by: sbirmiwal
-      last_modified_at: '2025-07-01T20:47:17.558Z'
+      last_modified_at: '2025-07-01T20:57:23.548Z'
       last_modified_by: sbirmiwal
       display_name: DES Studio
       description: Provision 1-stage and 2-stage DES clusters
@@ -17,6 +17,11 @@
           <%
 
           import ipaddress
+
+          # Constants
+
+          POD_MIN = 0
+          POD_MAX = 12
 
           # Globals
 
@@ -75,6 +80,10 @@
                 baseIpv6Subnet = ( baseIpv6Addr + "/112" ) if baseIpv6Addr else None
                 baseV6Addr = list(ipaddress.IPv6Address(baseIpv6Addr).packed) if baseIpv6Addr else None
 
+                if not baseV4Addr and not baseV6Addr:
+                   raise ValueError("Must specify at least one of base IPv4 or base IPv6 address")
+                endif
+
                 stage2SpineSwitchCount = clustersGroup.get("stage2SpineSwitchCount", 0)
 
                 # Iterate over all defined pods
@@ -83,6 +92,15 @@
                    podId = None
                    if podInput.get("inputs", {}).get("podsGroup", None):
                       podId = podInput["tags"]["query"].split(":")[1]
+                      try:
+                         podId = int(podId)
+                      except:
+                         raise ValueError(f"Invalid pod ID '{podId}': must be an integer")
+                      
+                      if podId > POD_MAX or podId < POD_MIN:
+                         raise ValueError(f"Invalid pod ID {podId}: must be between {POD_MIN} and {POD_MAX}")
+                      endif
+
                       podsData[podId] = {
                          "spineSwitchCount": podInput["inputs"]["podsGroup"]["spineSwitchCount"],
                          "leafSwitchCount": podInput["inputs"]["podsGroup"]["leafSwitchCount"],
@@ -229,152 +247,6 @@
       input_schema:
         fields:
           values:
-            f59c6c99-d4cc-4b79-8d7d-b74209d761f6:
-              id: f59c6c99-d4cc-4b79-8d7d-b74209d761f6
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: spineSwitches
-              label: Spine switches
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props:
-                base_field_id: 2c2bc4da-89f7-438c-931b-861d70aaded6
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: null
-                tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            07bc2f7e-6625-45b9-ae46-c422feeb94c7:
-              id: 07bc2f7e-6625-45b9-ae46-c422feeb94c7
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: spineSwitchCount
-              label: Spine switch count
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 1..40
-                dynamic_options: null
-                extra_values_allowed: false
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7:
-              id: fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: clusters
-              label: Clusters
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props:
-                base_field_id: f8f37716-98d4-4535-a026-f3e8173692d0
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: DesCluster
-                tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4:
-              id: 4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: stage2SpineSwitchCount
-              label: Stage 2 spine switch count
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 0..256
-                dynamic_options: null
-                extra_values_allowed: false
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            ccbdec0b-bc3f-4709-9938-dda1b808acfa:
-              id: ccbdec0b-bc3f-4709-9938-dda1b808acfa
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: memberId
-              label: Member ID
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 0..39
-                dynamic_options: null
-                extra_values_allowed: false
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            f8f37716-98d4-4535-a026-f3e8173692d0:
-              id: f8f37716-98d4-4535-a026-f3e8173692d0
-              type: INPUT_FIELD_TYPE_GROUP
-              name: clustersGroup
-              label: Clusters Group
-              description: Group of members for Clusters
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - 9ce08ef5-e624-4f89-bf43-e4840ff8a991
-                    - acc7753a-0b67-4359-9b0a-8e9f326b43da
-                    - 4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4
-                    - c979d984-a60c-4938-8057-b3e023ad5c3f
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            2c2bc4da-89f7-438c-931b-861d70aaded6:
-              id: 2c2bc4da-89f7-438c-931b-861d70aaded6
-              type: INPUT_FIELD_TYPE_GROUP
-              name: podSpinesGroup
-              label: Spine switches Group
-              description: Group of members for Spine switches
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - ccbdec0b-bc3f-4709-9938-dda1b808acfa
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
             acc7753a-0b67-4359-9b0a-8e9f326b43da:
               id: acc7753a-0b67-4359-9b0a-8e9f326b43da
               type: INPUT_FIELD_TYPE_RESOLVER
@@ -394,117 +266,6 @@
                 input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
                 input_tag_label: null
                 tag_filter_query: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            c979d984-a60c-4938-8057-b3e023ad5c3f:
-              id: c979d984-a60c-4938-8057-b3e023ad5c3f
-              type: INPUT_FIELD_TYPE_GROUP
-              name: controlPlaneConfiguration
-              label: Control plane configuration
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - a9200e8c-5d06-43a7-ac76-d921922f4644
-                    - d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
-                    - 37504c09-b0b5-4fba-b6c5-830bb4447fa9
-                    - 2a9c5bb1-7d2c-4828-96a0-daa302f9ea24
-                    - 5b5128b6-d104-4f38-a4d8-e3b1cb75ccd2
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            6f25e175-dc2d-4174-b436-110448e47bd4:
-              id: 6f25e175-dc2d-4174-b436-110448e47bd4
-              type: INPUT_FIELD_TYPE_GROUP
-              name: podsGroup
-              label: Pods Group
-              description: Group of members for Pods
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props: null
-              group_props:
-                members:
-                  values:
-                    - 07bc2f7e-6625-45b9-ae46-c422feeb94c7
-                    - 8e764039-bc13-405c-aaeb-c621f3be6704
-                    - dfebe4fa-5fc9-42ab-aa54-bccb5e2c9356
-                    - f59c6c99-d4cc-4b79-8d7d-b74209d761f6
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            10c2ca0b-a004-4674-9b55-f3e974a69901:
-              id: 10c2ca0b-a004-4674-9b55-f3e974a69901
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: memberId
-              label: Member ID
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: null
-                dynamic_options: null
-                extra_values_allowed: false
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54:
-              id: d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
-              type: INPUT_FIELD_TYPE_STRING
-              name: baseIPv4Address
-              label: Base IPv4 address
-              description: 'First IPv4 address for a /16 subnet for leaf loopback addresses '
-              required: false
-              boolean_props: null
-              integer_props: null
-              float_props: null
-              string_props:
-                default_value: null
-                static_options: null
-                dynamic_options: null
-                length: null
-                pattern: null
-                format: null
-                is_secret: false
-                extra_values_allowed: false
-              group_props: null
-              collection_props: null
-              resolver_props: null
-              auto_fill_action_id: ''
-              tag_matcher_props: null
-            8e764039-bc13-405c-aaeb-c621f3be6704:
-              id: 8e764039-bc13-405c-aaeb-c621f3be6704
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: leafSwitchCount
-              label: Leaf switch count
-              description: ''
-              required: false
-              boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 1..256
-                dynamic_options: null
-                extra_values_allowed: false
-              float_props: null
-              string_props: null
-              group_props: null
-              collection_props: null
-              resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
             2a9c5bb1-7d2c-4828-96a0-daa302f9ea24:
@@ -531,23 +292,21 @@
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            5a79d5f3-d82e-44e5-83e1-8ef62957a010:
-              id: 5a79d5f3-d82e-44e5-83e1-8ef62957a010
-              type: INPUT_FIELD_TYPE_INTEGER
-              name: memberId
-              label: Member ID
-              description: ''
+            82634138-7ac6-4f22-9438-0637429a5c08:
+              id: 82634138-7ac6-4f22-9438-0637429a5c08
+              type: INPUT_FIELD_TYPE_GROUP
+              name: podLeafsGroup
+              label: Leaf switches Group
+              description: Group of members for Leaf switches
               required: false
               boolean_props: null
-              integer_props:
-                default_value: null
-                static_options: null
-                range: 0..255
-                dynamic_options: null
-                extra_values_allowed: false
+              integer_props: null
               float_props: null
               string_props: null
-              group_props: null
+              group_props:
+                members:
+                  values:
+                    - 5a79d5f3-d82e-44e5-83e1-8ef62957a010
               collection_props: null
               resolver_props: null
               auto_fill_action_id: ''
@@ -573,6 +332,88 @@
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
+            4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4:
+              id: 4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: stage2SpineSwitchCount
+              label: Stage 2 spine switch count
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 0..256
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            07bc2f7e-6625-45b9-ae46-c422feeb94c7:
+              id: 07bc2f7e-6625-45b9-ae46-c422feeb94c7
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: spineSwitchCount
+              label: Spine switch count
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 1..40
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            10c2ca0b-a004-4674-9b55-f3e974a69901:
+              id: 10c2ca0b-a004-4674-9b55-f3e974a69901
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: memberId
+              label: Member ID
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: null
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            2c2bc4da-89f7-438c-931b-861d70aaded6:
+              id: 2c2bc4da-89f7-438c-931b-861d70aaded6
+              type: INPUT_FIELD_TYPE_GROUP
+              name: podSpinesGroup
+              label: Spine switches Group
+              description: Group of members for Spine switches
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props:
+                members:
+                  values:
+                    - ccbdec0b-bc3f-4709-9938-dda1b808acfa
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
             c5fa6ece-a88d-42e9-b8a6-841f2714353c:
               id: c5fa6ece-a88d-42e9-b8a6-841f2714353c
               type: INPUT_FIELD_TYPE_GROUP
@@ -588,6 +429,71 @@
                 members:
                   values:
                     - 10c2ca0b-a004-4674-9b55-f3e974a69901
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            f59c6c99-d4cc-4b79-8d7d-b74209d761f6:
+              id: f59c6c99-d4cc-4b79-8d7d-b74209d761f6
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: spineSwitches
+              label: Spine switches
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props:
+                base_field_id: 2c2bc4da-89f7-438c-931b-861d70aaded6
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: null
+                tag_filter_query: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7:
+              id: fa6d917e-92d1-4f3a-a5c8-33962ce4bcc7
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: clusters
+              label: Clusters
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props:
+                base_field_id: f8f37716-98d4-4535-a026-f3e8173692d0
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: DesCluster
+                tag_filter_query: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            c979d984-a60c-4938-8057-b3e023ad5c3f:
+              id: c979d984-a60c-4938-8057-b3e023ad5c3f
+              type: INPUT_FIELD_TYPE_GROUP
+              name: controlPlaneConfiguration
+              label: Control plane configuration
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props:
+                members:
+                  values:
+                    - a9200e8c-5d06-43a7-ac76-d921922f4644
+                    - d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
+                    - 37504c09-b0b5-4fba-b6c5-830bb4447fa9
+                    - 2a9c5bb1-7d2c-4828-96a0-daa302f9ea24
+                    - 5b5128b6-d104-4f38-a4d8-e3b1cb75ccd2
               collection_props: null
               resolver_props: null
               auto_fill_action_id: ''
@@ -611,12 +517,12 @@
               resolver_props: null
               auto_fill_action_id: null
               tag_matcher_props: null
-            82634138-7ac6-4f22-9438-0637429a5c08:
-              id: 82634138-7ac6-4f22-9438-0637429a5c08
+            f8f37716-98d4-4535-a026-f3e8173692d0:
+              id: f8f37716-98d4-4535-a026-f3e8173692d0
               type: INPUT_FIELD_TYPE_GROUP
-              name: podLeafsGroup
-              label: Leaf switches Group
-              description: Group of members for Leaf switches
+              name: clustersGroup
+              label: Clusters Group
+              description: Group of members for Clusters
               required: false
               boolean_props: null
               integer_props: null
@@ -625,31 +531,116 @@
               group_props:
                 members:
                   values:
-                    - 5a79d5f3-d82e-44e5-83e1-8ef62957a010
+                    - 9ce08ef5-e624-4f89-bf43-e4840ff8a991
+                    - acc7753a-0b67-4359-9b0a-8e9f326b43da
+                    - 4cb446eb-15e4-40b9-bf9f-9e96edd4fbf4
+                    - c979d984-a60c-4938-8057-b3e023ad5c3f
               collection_props: null
               resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            a9200e8c-5d06-43a7-ac76-d921922f4644:
-              id: a9200e8c-5d06-43a7-ac76-d921922f4644
-              type: INPUT_FIELD_TYPE_STRING
-              name: loopbackInterface
-              label: Loopback interface
+            8e764039-bc13-405c-aaeb-c621f3be6704:
+              id: 8e764039-bc13-405c-aaeb-c621f3be6704
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: leafSwitchCount
+              label: Leaf switch count
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 1..256
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            9ce08ef5-e624-4f89-bf43-e4840ff8a991:
+              id: 9ce08ef5-e624-4f89-bf43-e4840ff8a991
+              type: INPUT_FIELD_TYPE_RESOLVER
+              name: pods
+              label: Pods
               description: ''
               required: false
               boolean_props: null
               integer_props: null
               float_props: null
-              string_props:
-                default_value: Loopback1
-                static_options: null
-                dynamic_options: null
-                length: null
-                pattern: null
-                format: null
-                is_secret: false
-                extra_values_allowed: false
+              string_props: null
               group_props: null
+              collection_props: null
+              resolver_props:
+                base_field_id: 6f25e175-dc2d-4174-b436-110448e47bd4
+                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
+                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
+                input_tag_label: DesClusterPod
+                tag_filter_query: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            ccbdec0b-bc3f-4709-9938-dda1b808acfa:
+              id: ccbdec0b-bc3f-4709-9938-dda1b808acfa
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: memberId
+              label: Member ID
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 0..39
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            5a79d5f3-d82e-44e5-83e1-8ef62957a010:
+              id: 5a79d5f3-d82e-44e5-83e1-8ef62957a010
+              type: INPUT_FIELD_TYPE_INTEGER
+              name: memberId
+              label: Member ID
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props:
+                default_value: null
+                static_options: null
+                range: 0..255
+                dynamic_options: null
+                extra_values_allowed: false
+              float_props: null
+              string_props: null
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            6f25e175-dc2d-4174-b436-110448e47bd4:
+              id: 6f25e175-dc2d-4174-b436-110448e47bd4
+              type: INPUT_FIELD_TYPE_GROUP
+              name: podsGroup
+              label: Pods Group
+              description: Group of members for Pods
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props: null
+              group_props:
+                members:
+                  values:
+                    - 07bc2f7e-6625-45b9-ae46-c422feeb94c7
+                    - 8e764039-bc13-405c-aaeb-c621f3be6704
+                    - dfebe4fa-5fc9-42ab-aa54-bccb5e2c9356
+                    - f59c6c99-d4cc-4b79-8d7d-b74209d761f6
               collection_props: null
               resolver_props: null
               auto_fill_action_id: ''
@@ -666,6 +657,30 @@
               float_props: null
               string_props:
                 default_value: DES_PEERS
+                static_options: null
+                dynamic_options: null
+                length: null
+                pattern: null
+                format: null
+                is_secret: false
+                extra_values_allowed: false
+              group_props: null
+              collection_props: null
+              resolver_props: null
+              auto_fill_action_id: ''
+              tag_matcher_props: null
+            a9200e8c-5d06-43a7-ac76-d921922f4644:
+              id: a9200e8c-5d06-43a7-ac76-d921922f4644
+              type: INPUT_FIELD_TYPE_STRING
+              name: loopbackInterface
+              label: Loopback interface
+              description: ''
+              required: false
+              boolean_props: null
+              integer_props: null
+              float_props: null
+              string_props:
+                default_value: Loopback1
                 static_options: null
                 dynamic_options: null
                 length: null
@@ -699,25 +714,28 @@
                 tag_filter_query: null
               auto_fill_action_id: ''
               tag_matcher_props: null
-            9ce08ef5-e624-4f89-bf43-e4840ff8a991:
-              id: 9ce08ef5-e624-4f89-bf43-e4840ff8a991
-              type: INPUT_FIELD_TYPE_RESOLVER
-              name: pods
-              label: Pods
-              description: ''
+            d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54:
+              id: d8c3f2ee-fbfe-4fcd-bc6e-086a16e51f54
+              type: INPUT_FIELD_TYPE_STRING
+              name: baseIPv4Address
+              label: Base IPv4 address
+              description: 'First IPv4 address for a /16 subnet for leaf loopback addresses '
               required: false
               boolean_props: null
               integer_props: null
               float_props: null
-              string_props: null
+              string_props:
+                default_value: null
+                static_options: null
+                dynamic_options: null
+                length: null
+                pattern: null
+                format: null
+                is_secret: false
+                extra_values_allowed: false
               group_props: null
               collection_props: null
-              resolver_props:
-                base_field_id: 6f25e175-dc2d-4174-b436-110448e47bd4
-                display_mode: RESOLVER_FIELD_DISPLAY_MODE_SPARSE
-                input_mode: RESOLVER_FIELD_INPUT_MODE_SINGLE_DEVICE_TAG
-                input_tag_label: DesClusterPod
-                tag_filter_query: null
+              resolver_props: null
               auto_fill_action_id: ''
               tag_matcher_props: null
         layout:
